@@ -37,9 +37,30 @@ def generate_player_link(title, media_id, media_type):
 
 @app.route("/")
 def index():
+    ascii_art = r"""
+  ______ _      _____  _____ _  ________ _    
+ |  ____| |    |_   _|/ ____| |/ /  ____| |   
+ | |__  | |      | | | (___ | ' /| |__  | |   
+ |  __| | |      | |  \___ \|  < |  __| | |   
+ | |____| |____ _| |_ ____) | . \| |____| |____ 
+ |______|______|_____|_____/|_|\_\______|______|
+                                              
+         ░▒▓█ FLISK API — VERSÃO 2.0 █▓▒░
+    """
     return jsonify({
-        "api": "Welcome",
-        "version": "2.0"
+        "ascii_logo": ascii_art,
+        "api": "FLISK - Xtream Proxy API",
+        "versao": "2.0",
+        "endpoints": {
+            "filmes": {
+                "listar": "/filmes"
+            },
+            "series": {
+                "episodios": "/series/<serie_id>/temporadas/<temporada_num>/episodios"
+            },
+            "detalhes": "/detalhes?titulo=TITULO&tipo=[filme|serie]",
+            "player": "/player/<SLUG>.mp4"
+        }
     })
 
 @app.route("/filmes")
