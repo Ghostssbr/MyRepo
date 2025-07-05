@@ -3,7 +3,6 @@ import requests
 import hashlib
 import re
 import tmdbsimple as tmdb
-from flask_vercel import vercel
 
 # CONFIG
 USERNAME = "98413537"
@@ -14,7 +13,6 @@ tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 app = Flask(__name__)
 slug_stream_map = {}
 
-# UTILS
 def xtream_api(action, extra=""):
     url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
     try:
@@ -37,7 +35,6 @@ def generate_player_link(title, media_id, media_type):
     }
     return slug
 
-# ROTAS
 @app.route("/")
 def index():
     return jsonify({
@@ -111,6 +108,3 @@ def detalhes():
         "url_player": player_url,
         "url_tmdb": f"https://www.themoviedb.org/{media_type}/{resultado['id']}"
     })
-
-# Adaptar para Vercel
-app = vercel(app)
