@@ -13,6 +13,7 @@ tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 app = Flask(__name__)
 slug_stream_map = {}
 
+# UTILS
 def xtream_api(action, extra=""):
     url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
     try:
@@ -35,23 +36,10 @@ def generate_player_link(title, media_id, media_type):
     }
     return slug
 
+# ROTAS
 
 @app.route("/")
 def index():
-    ascii_art = r"""
-   
-  
-
-  ███████╗██╗     ███████╗██╗  ██╗
-  ██╔════╝██║     ██╔════╝██║  ██║
-  █████╗  ██║     ███████╗███████║
-  ██╔══╝  ██║     ╚════██║██╔══██║
-  ██║     ███████╗███████║██║  ██║
-  ╚═╝     ╚══════╝╚══════╝╚═╝  ╚═╝
-  
-  ░░░░░ ░░▒▒▓▓  GHOST  ▓▓▒▒░░ ░░░░░
-    """
-
     return jsonify({
         "api": "FLISK API",
         "version": "2.0",
@@ -88,9 +76,31 @@ def listar_filmes():
 
 @app.route("/player/<slug>.mp4")
 def player(slug):
-    if slug not in slug_stream_map:
-        return jsonify({"erro": "Conteúdo não encontrado"}), 404
-    media = slug_stream_map[slug]
+    media = slug_stream_map.get(slug)
+
+    if not media:
+        match = re.match(r'(.+)-([a-f0-9]{6})$', slug)
+        if match:
+            nome_slug = match.group(1).replace('-', ' ')
+            filmes = xtream_api("get_vod_streams")
+            for filme in filmes:
+                if slugify(filme['name']) in slug:
+                    media = {
+                        "id": filme['stream_id'],
+                        "type": "movie"
+                    }
+                    break
+
+    if not media:
+        media_id = request.args.get("id")
+        media_type = request.args.get("tipo")
+        if not media_id or not media_type:
+            return jsonify({"erro": "Slug inválido e parâmetros ausentes"}), 404
+        media = {
+            "id": media_id,
+            "type": media_type
+        }
+
     return redirect(
         f"http://finstv.wtf:80/{media['type']}/{USERNAME}/{PASSWORD}/{media['id']}.mp4"
     )
@@ -104,6 +114,7 @@ def detalhes():
 
     search = tmdb.Search()
     media_type = 'movie' if tipo == 'filme' else 'tv'
+    
     if media_type == 'movie':
         search.movie(query=titulo)
     else:
@@ -113,7 +124,20 @@ def detalhes():
         return jsonify({"erro": "Conteúdo não encontrado"}), 404
 
     resultado = search.results[0]
-    details = tmdb.Movies(resultado['id']).info() if media_type == 'movie' else tmdb.TV(resultado['id']).info()
+    id_tmdb = resultado['id']
+
+    # Informações principais
+    details = tmdb.Movies(id_tmdb).info() if media_type == 'movie' else tmdb.TV(id_tmdb).info()
+    credits = tmdb.Movies(id_tmdb).credits() if media_type == 'movie' else tmdb.TV(id_tmdb).credits()
+    videos = tmdb.Movies(id_tmdb).videos() if media_type == 'movie' else tmdb.TV(id_tmdb).videos()
+
+    elenco = [ator['name'] for ator in credits.get('cast', [])[:10]]
+    producao = [prod['name'] for prod in details.get('production_companies', [])]
+    trailers = [
+        f"https://www.youtube.com/watch?v={v['key']}"
+        for v in videos.get('results', [])
+        if v['type'] == 'Trailer' and v['site'] == 'YouTube'
+    ]
 
     player_url = None
     dominio = request.host_url.rstrip('/')
@@ -128,11 +152,12 @@ def detalhes():
         "sinopse": resultado.get('overview', 'Sem sinopse disponível'),
         "poster": f"https://image.tmdb.org/t/p/w500{resultado.get('poster_path')}" if resultado.get('poster_path') else None,
         "avaliacao": resultado.get('vote_average', 0),
+        "elenco": elenco,
+        "producao": producao,
+        "trailers": trailers,
         "url_player": player_url,
-        "url_tmdb": f"https://www.themoviedb.org/{media_type}/{resultado['id']}"
+        "url_tmdb": f"https://www.themoviedb.org/{media_type}/{id_tmdb}"
     })
-
-
 
 @app.route("/series/<int:serie_id>/temporadas/<int:temporada_num>/episodios")
 def episodios_temporada(serie_id, temporada_num):
@@ -142,7 +167,7 @@ def episodios_temporada(serie_id, temporada_num):
     dominio = request.host_url.rstrip('/')
     resultado = []
     for idx, ep in enumerate(episodios, 1):
-        slug = generate_player_link(ep['name'], ep['stream_id'], 'episode')
+        slug = generate_player_link(ep['name'], ep['id'], 'episode')
         resultado.append({
             "id": idx,
             "titulo": ep['name'],
@@ -156,3 +181,16 @@ def episodios_temporada(serie_id, temporada_num):
         "total_episodios": len(episodios),
         "episodios": resultado
     })
+
+@app.route("/player_direct")
+def player_direct():
+    media_id = request.args.get("id")
+    media_type = request.args.get("tipo")
+    if not media_id or not media_type:
+        return jsonify({"erro": "Parâmetros 'id' e 'tipo' são obrigatórios"}), 400
+
+    return redirect(
+        f"http://finstv.wtf:80/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4"
+    )
+
+# INICIAR APP
