@@ -1,4 +1,4 @@
 Flask
 requests
 tmdbsimple
-vercel-wsgi
+flask-vercel
