@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, redirect, request
+from flask_cors import CORS
 import requests
 import hashlib
 import re
@@ -11,6 +12,8 @@ BASE_URL = "https://finstv.wtf/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
 app = Flask(__name__)
+CORS(app)  # Permitir requisições de todos os domínios
+
 slug_stream_map = {}
 
 # UTILS
@@ -193,4 +196,3 @@ def player_direct():
         f"http://finstv.wtf:80/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4"
     )
 
-# INICIAR APP
