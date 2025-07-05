@@ -3,8 +3,9 @@ import requests
 import hashlib
 import re
 import tmdbsimple as tmdb
-from datetime import datetime
+from flask_vercel import vercel
 
+# CONFIG
 USERNAME = "98413537"
 PASSWORD = "65704277"
 BASE_URL = "https://finstv.wtf/player_api.php"
@@ -13,6 +14,7 @@ tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 app = Flask(__name__)
 slug_stream_map = {}
 
+# UTILS
 def xtream_api(action, extra=""):
     url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
     try:
@@ -35,6 +37,7 @@ def generate_player_link(title, media_id, media_type):
     }
     return slug
 
+# ROTAS
 @app.route("/")
 def index():
     return jsonify({
@@ -67,14 +70,47 @@ def listar_filmes():
 def player(slug):
     if slug not in slug_stream_map:
         return jsonify({"erro": "Conteúdo não encontrado"}), 404
-
     media = slug_stream_map[slug]
     return redirect(
         f"http://finstv.wtf:80/{media['type']}/{USERNAME}/{PASSWORD}/{media['id']}.mp4"
     )
 
-# Adaptador WSGI para Vercel
-from vercel_wsgi import handle_request
+@app.route("/detalhes")
+def detalhes():
+    titulo = request.args.get("titulo")
+    tipo = request.args.get("tipo", "filme")
+    if not titulo:
+        return jsonify({"erro": "Parâmetro 'titulo' é obrigatório"}), 400
 
-def handler(environ, start_response):
-    return handle_request(app, environ, start_response)
+    search = tmdb.Search()
+    media_type = 'movie' if tipo == 'filme' else 'tv'
+    if media_type == 'movie':
+        search.movie(query=titulo)
+    else:
+        search.tv(query=titulo)
+
+    if not search.results:
+        return jsonify({"erro": "Conteúdo não encontrado"}), 404
+
+    resultado = search.results[0]
+    details = tmdb.Movies(resultado['id']).info() if media_type == 'movie' else tmdb.TV(resultado['id']).info()
+
+    player_url = None
+    dominio = request.host_url.rstrip('/')
+    for slug, item in slug_stream_map.items():
+        if item['title'].lower() == titulo.lower() and item['type'] == media_type:
+            player_url = f"{dominio}/player/{slug}.mp4"
+            break
+
+    return jsonify({
+        "titulo": resultado.get('title') or resultado.get('name'),
+        "ano": (resultado.get('release_date') or resultado.get('first_air_date', ''))[:4],
+        "sinopse": resultado.get('overview', 'Sem sinopse disponível'),
+        "poster": f"https://image.tmdb.org/t/p/w500{resultado.get('poster_path')}" if resultado.get('poster_path') else None,
+        "avaliacao": resultado.get('vote_average', 0),
+        "url_player": player_url,
+        "url_tmdb": f"https://www.themoviedb.org/{media_type}/{resultado['id']}"
+    })
+
+# Adaptar para Vercel
+app = vercel(app)
