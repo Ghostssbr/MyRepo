@@ -35,31 +35,34 @@ def generate_player_link(title, media_id, media_type):
     }
     return slug
 
-@app.route("/")
+
 @app.route("/")
 def index():
     ascii_art = r"""
-   _______  ___      ___   _______  ___   _    _______  _______  ___  
-|       ||   |    |   | |       ||   | | |  |   _   ||       ||   | 
-|    ___||   |    |   | |  _____||   |_| |  |  |_|  ||    _  ||   | 
-|   |___ |   |    |   | | |_____ |      _|  |       ||   |_| ||   | 
-|    ___||   |___ |   | |_____  ||     |_   |       ||    ___||   | 
-|   |    |       ||   |  _____| ||    _  |  |   _   ||   |    |   | 
-|___|    |_______||___| |_______||___| |_|  |__| |__||___|    |___| 
+   
+  
 
-               ░▒▓█ FLISK API █▓▒░
+  ███████╗██╗     ███████╗██╗  ██╗
+  ██╔════╝██║     ██╔════╝██║  ██║
+  █████╗  ██║     ███████╗███████║
+  ██╔══╝  ██║     ╚════██║██╔══██║
+  ██║     ███████╗███████║██║  ██║
+  ╚═╝     ╚══════╝╚══════╝╚═╝  ╚═╝
+  
+  ░░░░░ ░░▒▒▓▓  GHOST  ▓▓▒▒░░ ░░░░░
     """
 
     return jsonify({
-        "logo": ascii_art,
         "api": "FLISK API",
-        "versao": "2.0",
+        "version": "2.0",
+        "author": "GHOST",
         "endpoints": {
             "filmes": "/filmes",
             "series_episodios": "/series/<serie_id>/temporadas/<temporada_num>/episodios",
             "detalhes": "/detalhes?titulo=TITULO&tipo=[filme|serie]",
             "player": "/player/<slug>.mp4"
-        }
+        },
+        "note": "✨ API desenvolvida por GHOST ✨"
     })
 
 @app.route("/filmes")
