@@ -36,30 +36,29 @@ def generate_player_link(title, media_id, media_type):
     return slug
 
 @app.route("/")
+@app.route("/")
 def index():
     ascii_art = r"""
-  ______ _      _____  _____ _  ________ _    
- |  ____| |    |_   _|/ ____| |/ /  ____| |   
- | |__  | |      | | | (___ | ' /| |__  | |   
- |  __| | |      | |  \___ \|  < |  __| | |   
- | |____| |____ _| |_ ____) | . \| |____| |____ 
- |______|______|_____|_____/|_|\_\______|______|
-                                              
-         ░▒▓█ FLISK API — VERSÃO 2.0 █▓▒░
+   _______  ___      ___   _______  ___   _    _______  _______  ___  
+|       ||   |    |   | |       ||   | | |  |   _   ||       ||   | 
+|    ___||   |    |   | |  _____||   |_| |  |  |_|  ||    _  ||   | 
+|   |___ |   |    |   | | |_____ |      _|  |       ||   |_| ||   | 
+|    ___||   |___ |   | |_____  ||     |_   |       ||    ___||   | 
+|   |    |       ||   |  _____| ||    _  |  |   _   ||   |    |   | 
+|___|    |_______||___| |_______||___| |_|  |__| |__||___|    |___| 
+
+               ░▒▓█ FLISK API █▓▒░
     """
+
     return jsonify({
-        "ascii_logo": ascii_art,
-        "api": "FLISK - Xtream Proxy API",
+        "logo": ascii_art,
+        "api": "FLISK API",
         "versao": "2.0",
         "endpoints": {
-            "filmes": {
-                "listar": "/filmes"
-            },
-            "series": {
-                "episodios": "/series/<serie_id>/temporadas/<temporada_num>/episodios"
-            },
+            "filmes": "/filmes",
+            "series_episodios": "/series/<serie_id>/temporadas/<temporada_num>/episodios",
             "detalhes": "/detalhes?titulo=TITULO&tipo=[filme|serie]",
-            "player": "/player/<SLUG>.mp4"
+            "player": "/player/<slug>.mp4"
         }
     })
 
