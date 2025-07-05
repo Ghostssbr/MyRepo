@@ -38,7 +38,7 @@ def generate_player_link(title, media_id, media_type):
 @app.route("/")
 def index():
     return jsonify({
-        "api": "Xtream API Proxy",
+        "api": "Welcome",
         "version": "2.0"
     })
 
@@ -107,4 +107,29 @@ def detalhes():
         "avaliacao": resultado.get('vote_average', 0),
         "url_player": player_url,
         "url_tmdb": f"https://www.themoviedb.org/{media_type}/{resultado['id']}"
+    })
+
+
+
+@app.route("/series/<int:serie_id>/temporadas/<int:temporada_num>/episodios")
+def episodios_temporada(serie_id, temporada_num):
+    info = xtream_api("get_series_info", f"&series_id={serie_id}")
+    episodios = info.get('episodes', {}).get(str(temporada_num), [])
+
+    dominio = request.host_url.rstrip('/')
+    resultado = []
+    for idx, ep in enumerate(episodios, 1):
+        slug = generate_player_link(ep['name'], ep['stream_id'], 'episode')
+        resultado.append({
+            "id": idx,
+            "titulo": ep['name'],
+            "numero_episodio": ep.get('episode_number', idx),
+            "url_player": f"{dominio}/player/{slug}.mp4"
+        })
+
+    return jsonify({
+        "serie_id": serie_id,
+        "temporada": temporada_num,
+        "total_episodios": len(episodios),
+        "episodios": resultado
     })
