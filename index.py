@@ -123,30 +123,69 @@ def serie_episodios(serie_id, temp_num):
     } for ep in episodios])
 
 # Rota de Detalhes via TMDB
-@app.route("/detalhes")
+@app.route('/detalhes')
 def detalhes():
     titulo = request.args.get("titulo")
-    tipo = request.args.get("tipo", "filme")
-    
-    search = tmdb.Search()
-    if tipo == "filme":
-        search.movie(query=titulo)
-        media_type = "movie"
-    else:
-        search.tv(query=titulo)
-        media_type = "tv"
-    
-    if not search.results:
-        return jsonify({"error": "Não encontrado"}), 404
-    
-    item = search.results[0]
-    return jsonify({
-        "titulo": item.get('title') or item.get('name'),
-        "sinopse": item.get('overview'),
-        "poster": f"https://image.tmdb.org/t/p/w500{item.get('poster_path')}",
-        "ano": (item.get('release_date') or item.get('first_air_date', ''))[:4],
-        "tmdb_url": f"https://www.themoviedb.org/{media_type}/{item['id']}"
-    })
+    tipo = request.args.get("tipo")  # filme ou serie
+
+    if not titulo or not tipo:
+        return jsonify({"erro": "Parâmetros obrigatórios: titulo e tipo"}), 400
+
+    try:
+        # 1. Buscar pelo título
+        search_type = "movie" if tipo == "filme" else "tv"
+        search_url = f"https://api.themoviedb.org/3/search/{search_type}"
+        search_params = {
+            "api_key":tmdb.API_KEY,
+            "query": titulo,
+            "language": "pt-BR"
+        }
+        search_res = requests.get(search_url, params=search_params).json()
+        if not search_res.get("results"):
+            return jsonify({"erro": "Título não encontrado no TMDb"}), 404
+
+        item = search_res["results"][0]
+        tmdb_id = item["id"]
+
+        # 2. Detalhes
+        details_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}"
+        details_res = requests.get(details_url, params={"api_key": tmdb.API_KEY, "language": "pt-BR"}).json()
+
+        # 3. Créditos (elenco e equipe)
+        credits_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits"
+        credits_res = requests.get(credits_url, params={"api_key": tmdb.API_KEY, "language": "pt-BR"}).json()
+        
+        elenco = [ator["name"] for ator in credits_res.get("cast", [])[:10]]
+        diretores = [p["name"] for p in credits_res.get("crew", []) if p["job"] == "Director"]
+        criadores = [p["name"] for p in details_res.get("created_by", [])]
+
+        # 4. Trailer
+        videos_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/videos"
+        videos_res = requests.get(videos_url, params={"api_key": tmdb.API_KEY}).json()
+        trailer_key = next((v["key"] for v in videos_res.get("results", []) if v["type"] == "Trailer" and v["site"] == "YouTube"), None)
+
+        return jsonify({
+            "titulo": details_res.get("title") or details_res.get("name"),
+            "titulo_original": details_res.get("original_title") or details_res.get("original_name"),
+            "descricao": details_res.get("overview"),
+            "ano": (details_res.get("release_date") or details_res.get("first_air_date") or "")[:4],
+            "generos": [g["name"] for g in details_res.get("genres", [])],
+            "duracao": details_res.get("runtime"),
+            "temporadas": details_res.get("number_of_seasons"),
+            "episodios": details_res.get("number_of_episodes"),
+            "nota": details_res.get("vote_average"),
+            "votos": details_res.get("vote_count"),
+            "idiomas": details_res.get("spoken_languages"),
+            "poster": f"https://image.tmdb.org/t/p/w500{details_res.get('poster_path')}" if details_res.get("poster_path") else None,
+            "banner": f"https://image.tmdb.org/t/p/original{details_res.get('backdrop_path')}" if details_res.get("backdrop_path") else None,
+            "elenco": elenco,
+            "diretores": diretores,
+            "criadores": criadores,
+            "trailer_youtube": f"https://www.youtube.com/watch?v={trailer_key}" if trailer_key else None
+        })
+
+    except Exception as e:
+        return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
 
 # Rota do player corrigida
 @app.route("/player/<slug>.mp4")
@@ -181,3 +220,4 @@ def index():
             "player": f"{dominio}/player/<SLUG>.mp4?id=ID&type=[movie|series]"
         }
     })
+
