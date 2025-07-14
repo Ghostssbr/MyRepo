@@ -14,8 +14,6 @@ PASSWORD = "65704277"
 BASE_URL = "https://finstv.wtf/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
-slug_stream_map = {}
-
 # Utilitários
 def xtream_api(action, extra=""):
     url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
@@ -40,7 +38,7 @@ def filmes():
         "titulo": item['name'],
         "ano": item.get('release_year'),
         "capa": item.get('cover'),
-        "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4",
+        "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4?id={item['stream_id']}&type=movie",
         "detalhes": f"{dominio}/detalhes?titulo={item['name']}&tipo=filme"
     } for item in data])
 
@@ -63,7 +61,7 @@ def filmes_por_categoria(cat_id):
     return jsonify([{
         "id": item['stream_id'],
         "titulo": item['name'],
-        "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4"
+        "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4?id={item['stream_id']}&type=movie"
     } for item in data])
 
 # Rotas de Séries
@@ -121,10 +119,10 @@ def serie_episodios(serie_id, temp_num):
         "id": ep['id'],
         "titulo": ep['title'],
         "numero": ep['episode_num'],
-        "player": f"{dominio}/player/{generate_slug(ep['title'], ep['id'])}.mp4"
+        "player": f"{dominio}/player/{generate_slug(ep['title'], ep['id'])}.mp4?id={ep['id']}&type=series"
     } for ep in episodios])
 
-# Rotas Complementares
+# Rota de Detalhes via TMDB
 @app.route("/detalhes")
 def detalhes():
     titulo = request.args.get("titulo")
@@ -150,16 +148,18 @@ def detalhes():
         "tmdb_url": f"https://www.themoviedb.org/{media_type}/{item['id']}"
     })
 
+# Rota do player corrigida
 @app.route("/player/<slug>.mp4")
 def player(slug):
     media_id = request.args.get("id")
     media_type = request.args.get("type")
-    
-    if not media_id or not media_type:
-        return jsonify({"error": "Parâmetros inválidos"}), 400
-    
-    return redirect(f"http://finstv.wtf:80/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
 
+    if not media_id or media_type not in ["movie", "series"]:
+        return jsonify({"error": "Parâmetros inválidos"}), 400
+
+    return redirect(f"https://finstv.wtf/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
+
+# Página inicial com as rotas disponíveis
 @app.route("/")
 def index():
     dominio = request.host_url.rstrip('/')
@@ -178,6 +178,6 @@ def index():
                 "episodios": f"{dominio}/series/<ID>/temporadas/<NUM>/episodios"
             },
             "detalhes": f"{dominio}/detalhes?titulo=TITULO&tipo=[filme|serie]",
-            "player": f"{dominio}/player/<SLUG>.mp4"
+            "player": f"{dominio}/player/<SLUG>.mp4?id=ID&type=[movie|series]"
         }
     })
