@@ -9,9 +9,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Configurações
-USERNAME = "97771665"
-PASSWORD = "34543597"
-BASE_URL = "https://finstv.wtf/player_api.php"
+USERNAME = "712716141"
+PASSWORD = "169811938"
+BASE_URL = "https://huloftibu.lol/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
 # Utilitários
