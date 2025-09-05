@@ -11,7 +11,7 @@ CORS(app)
 # Configurações
 USERNAME = "Sidney0011"
 PASSWORD = "sid09105245"
-BASE_URL = "new.pionner.pro:8080/player_api.php"
+BASE_URL = "http://new.pionner.pro:8080/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
 # Utilitários
