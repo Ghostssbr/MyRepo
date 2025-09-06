@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, redirect, request, Response, stream_with_context
+from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
 import requests
 import hashlib
@@ -332,3 +332,36 @@ def conteudo_adulto():
             adult_items.append({"tipo": "serie", "id": item.get("series_id"), "titulo": item.get("name")})
 
     return jsonify({"total": len(adult_items), "items": adult_items})
+
+# ---------- Handler para Vercel ----------
+def handler(request):
+    from flask import Request, Response
+    import json
+    
+    # Converter o request do Vercel para o do Flask
+    flask_request = Request.from_values(
+        path=request.path,
+        method=request.method,
+        headers=request.headers,
+        query_string=request.query_string,
+        data=request.body
+    )
+    
+    with app.request_context(flask_request.environ):
+        try:
+            response = app.full_dispatch_request()
+            return Response(
+                response=response.get_data(),
+                status=response.status_code,
+                headers=dict(response.headers)
+            )
+        except Exception as e:
+            return Response(
+                response=json.dumps({"error": str(e)}),
+                status=500,
+                headers={"Content-Type": "application/json"}
+            )
+
+# ---------- Para desenvolvimento local ----------
+if __name__ == "__main__":
+    app.run(debug=True)
