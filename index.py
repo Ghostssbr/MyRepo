@@ -1,13 +1,13 @@
+from http.server import BaseHTTPRequestHandler
 from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
 import requests
 import hashlib
 import re
 import logging
+import json
 from typing import List, Dict
-
-app = Flask(__name__)
-CORS(app)
+from urllib.parse import urlparse, parse_qs
 
 # ---------- Configurações ----------
 USERNAME = "Sidney0011"
@@ -61,307 +61,222 @@ def is_adult_item(item: dict) -> bool:
     keywords = ["xxx", "18+", "18 +", "adult", "porn", "pornografia", "sexo", "erótico", "erotico"]
     return any(k in joined for k in keywords)
 
-# ---------- Erro 500 ----------
-@app.errorhandler(500)
-def internal_error(e):
-    logger.exception("Erro interno do servidor: %s", e)
-    return jsonify({"erro": "Internal Server Error", "detalhe": str(e)}), 500
+def get_dominio_from_headers(headers):
+    host = headers.get('Host', '')
+    if host:
+        return f"https://{host}"
+    return "http://localhost:3000"
 
-# ---------- Rotas de filmes ----------
-@app.route("/filmes")
-def filmes():
-    adult_param = request.args.get("adult")
-    data = xtream_api("get_vod_streams")
-    dominio = request.host_url.rstrip('/')
-    if not isinstance(data, list):
-        data = []
-
-    items = []
-    for item in data:
-        try:
-            entry = {
-                "id": item.get('stream_id'),
-                "titulo": item.get('name'),
-                "ano": item.get('release_year'),
-                "capa": item.get('cover'),
-                "player": f"{dominio}/player/{generate_slug(item.get('name',''), item.get('stream_id'))}.mp4?id={item.get('stream_id')}&type=movie",
-                "detalhes": f"{dominio}/detalhes?titulo={item.get('name')}&tipo=filme",
-                "raw": item
-            }
-            items.append(entry)
-        except Exception:
-            logger.exception("Erro ao processar item de filmes: %s", item)
-
-    if adult_param == "1":
-        items = [i for i in items if is_adult_item(i.get("raw", {}))]
-    elif adult_param == "0":
-        items = [i for i in items if not is_adult_item(i.get("raw", {}))]
-
-    return jsonify(items)
-
-@app.route("/filmes/categorias")
-def filmes_categorias():
-    cats = xtream_api("get_vod_categories")
-    dominio = request.host_url.rstrip('/')
-    if not isinstance(cats, list):
-        cats = []
-    return jsonify([{
-        "id": cat.get('category_id'),
-        "nome": cat.get('category_name'),
-        "url": f"{dominio}/filmes/categoria/{cat.get('category_id')}"
-    } for cat in cats])
-
-@app.route("/filmes/categoria/<int:cat_id>")
-def filmes_por_categoria(cat_id):
-    data = xtream_api("get_vod_streams", f"&category_id={cat_id}")
-    dominio = request.host_url.rstrip('/')
-    if not isinstance(data, list):
-        data = []
-    return jsonify([{
-        "id": item.get('stream_id'),
-        "titulo": item.get('name'),
-        "player": f"{dominio}/player/{generate_slug(item.get('name',''), item.get('stream_id'))}.mp4?id={item.get('stream_id')}&type=movie"
-    } for item in data])
-
-# ---------- Rotas de séries ----------
-@app.route("/series")
-def series():
-    data = xtream_api("get_series")
-    dominio = request.host_url.rstrip('/')
-    if not isinstance(data, list):
-        data = []
-    return jsonify([{
-        "id": item.get('series_id'),
-        "titulo": item.get('name'),
-        "temporadas": f"{dominio}/series/{item.get('series_id')}/temporadas",
-        "capa": item.get('cover')
-    } for item in data])
-
-@app.route("/series/categorias")
-def series_categorias():
-    cats = xtream_api("get_series_categories")
-    dominio = request.host_url.rstrip('/')
-    if not isinstance(cats, list):
-        cats = []
-    return jsonify([{
-        "id": cat.get('category_id'),
-        "nome": cat.get('category_name'),
-        "url": f"{dominio}/series/categoria/{cat.get('category_id')}"
-    } for cat in cats])
-
-@app.route("/series/categoria/<int:cat_id>")
-def series_por_categoria(cat_id):
-    data = xtream_api("get_series", f"&category_id={cat_id}")
-    dominio = request.host_url.rstrip('/')
-    if not isinstance(data, list):
-        data = []
-    return jsonify([{
-        "id": item.get('series_id'),
-        "titulo": item.get('name'),
-        "temporadas": f"{dominio}/series/{item.get('series_id')}/temporadas"
-    } for item in data])
-
-@app.route("/series/<int:serie_id>/temporadas")
-def serie_temporadas(serie_id):
-    data = xtream_api("get_series_info", f"&series_id={serie_id}")
-    dominio = request.host_url.rstrip('/')
-    episodes_map = data.get('episodes', {}) if isinstance(data, dict) else {}
-    temporadas = []
-    for num in episodes_map.keys():
-        try:
-            temporadas.append({
-                "numero": int(num),
-                "episodios": f"{dominio}/series/{serie_id}/temporadas/{num}/episodios"
-            })
-        except Exception:
-            logger.exception("Erro ao processar temporada %s para série %s", num, serie_id)
-    return jsonify(temporadas)
-
-@app.route("/series/<int:serie_id>/temporadas/<int:temp_num>/episodios")
-def serie_episodios(serie_id, temp_num):
-    data = xtream_api("get_series_info", f"&series_id={serie_id}")
-    episodios = []
-    if isinstance(data, dict):
-        episodios = data.get('episodes', {}).get(str(temp_num), [])
-    dominio = request.host_url.rstrip('/')
-    return jsonify([{
-        "id": ep.get('id'),
-        "titulo": ep.get('title'),
-        "numero": ep.get('episode_num'),
-        "player": f"{dominio}/player/{generate_slug(ep.get('title',''), ep.get('id'))}.mp4?id={ep.get('id')}&type=series"
-    } for ep in (episodios or [])])
-
-# ---------- Detalhes via TMDB ----------
-@app.route('/detalhes')
-def detalhes():
-    titulo = request.args.get("titulo")
-    tipo = request.args.get("tipo")
-    if not titulo or not tipo:
-        return jsonify({"erro": "Parâmetros obrigatórios: titulo e tipo"}), 400
-    try:
-        search_type = "movie" if tipo.lower() == "filme" else "tv"
-        search_url = f"https://api.themoviedb.org/3/search/{search_type}"
-        search_params = {"api_key": TMDB_API_KEY, "query": titulo, "language": "pt-BR"}
-        search_res = requests.get(search_url, params=search_params, timeout=10).json()
-        if not search_res.get("results"):
-            return jsonify({"erro": "Título não encontrado no TMDb"}), 404
-        item = search_res["results"][0]
-        tmdb_id = item["id"]
-        details_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}", 
-                                   params={"api_key": TMDB_API_KEY, "language": "pt-BR"}, timeout=10).json()
-        credits_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits",
-                                   params={"api_key": TMDB_API_KEY, "language": "pt-BR"}, timeout=10).json()
-        elenco = [ator.get("name") for ator in credits_res.get("cast", [])[:10]]
-        diretores = [p.get("name") for p in credits_res.get("crew", []) if p.get("job") == "Director"]
-        criadores = [p.get("name") for p in details_res.get("created_by", [])]
-        videos_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/videos",
-                                  params={"api_key": TMDB_API_KEY}, timeout=10).json()
-        trailer_key = next((v["key"] for v in videos_res.get("results", []) 
-                            if v.get("type")=="Trailer" and v.get("site")=="YouTube"), None)
-        return jsonify({
-            "titulo": details_res.get("title") or details_res.get("name"),
-            "titulo_original": details_res.get("original_title") or details_res.get("original_name"),
-            "descricao": details_res.get("overview"),
-            "ano": (details_res.get("release_date") or details_res.get("first_air_date") or "")[:4],
-            "generos": [g.get("name") for g in details_res.get("genres", [])],
-            "duracao": details_res.get("runtime"),
-            "temporadas": details_res.get("number_of_seasons"),
-            "episodios": details_res.get("number_of_episodes"),
-            "nota": details_res.get("vote_average"),
-            "votos": details_res.get("vote_count"),
-            "idiomas": details_res.get("spoken_languages"),
-            "poster": f"https://image.tmdb.org/t/p/w500{details_res.get('poster_path')}" if details_res.get("poster_path") else None,
-            "banner": f"https://image.tmdb.org/t/p/original{details_res.get('backdrop_path')}" if details_res.get("backdrop_path") else None,
-            "elenco": elenco,
-            "diretores": diretores,
-            "criadores": criadores,
-            "trailer_youtube": f"https://www.youtube.com/watch?v={trailer_key}" if trailer_key else None
-        })
-    except Exception as e:
-        logger.exception("Erro ao obter detalhes TMDB")
-        return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
-
-# ---------- Player (redirect para Pionner) ----------
-@app.route("/player/<path:slug>.mp4")
-def player(slug):
-    media_id = request.args.get("id")
-    raw_type = (request.args.get("type") or "").lower()
-    debug = request.args.get("debug")
-    type_map = {"movie":"movie","filme":"movie","series":"series","serie":"series","tv":"series"}
-    media_type = type_map.get(raw_type)
-    if not media_id or not media_type:
-        return jsonify({"error":"Parâmetros inválidos. Use ?id=ID&type=[movie|filme|series|serie|tv]"}), 400
-    target = f"http://new.pionner.pro:8080/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4"
-    if debug=="1":
-        return jsonify({"redirect_to": target})
-    return redirect(target, code=302)
-
-# ---------- Página inicial ----------
-@app.route("/")
-def index():
-    dominio = request.host_url.rstrip('/')
-    return jsonify({
-        "rotas": {
-            "filmes": {
-                "todos": f"{dominio}/filmes",
-                "categorias": f"{dominio}/filmes/categorias",
-                "por_categoria": f"{dominio}/filmes/categoria/<ID>"
-            },
-            "series": {
-                "todos": f"{dominio}/series",
-                "categorias": f"{dominio}/series/categorias",
-                "por_categoria": f"{dominio}/series/categoria/<ID>",
-                "temporadas": f"{dominio}/series/<ID>/temporadas",
-                "episodios": f"{dominio}/series/<ID>/temporadas/<NUM>/episodios"
-            },
-            "detalhes": f"{dominio}/detalhes?titulo=TITULO&tipo=[filme|serie]",
-            "player": f"{dominio}/player/<SLUG>.mp4?id=ID&type=[movie|series]",
-            "forum": {
-                "listar": f"{dominio}/forum (GET)",
-                "criar": f"{dominio}/forum (POST JSON)"
-            },
-            "conteudo_adulto": f"{dominio}/conteudo/adulto"
-        }
-    })
-
-# ---------- Endpoints do fórum ----------
-@app.route("/forum", methods=["GET"])
-def forum_list():
-    # opcional: ?page=1&per_page=10
-    page = max(1, int(request.args.get("page", 1)))
-    per_page = max(1, min(100, int(request.args.get("per_page", 10))))
-    start = (page - 1) * per_page
-    end = start + per_page
-    return jsonify({
-        "total": len(FORUM_TOPICS),
-        "page": page,
-        "per_page": per_page,
-        "items": FORUM_TOPICS[start:end]
-    })
-
-@app.route("/forum", methods=["POST"])
-def forum_create():
-    data = request.get_json(force=True, silent=True)
-    if not data or not data.get("titulo") or not data.get("conteudo"):
-        return jsonify({"erro": "JSON com 'titulo' e 'conteudo' obrigatórios"}), 400
-    topic_id = len(FORUM_TOPICS) + 1
-    topic = {
-        "id": topic_id,
-        "titulo": data.get("titulo"),
-        "conteudo": data.get("conteudo"),
-        "autor": data.get("autor") or "anon",
-        "criado_em": data.get("criado_em") or ""
-    }
-    FORUM_TOPICS.append(topic)
-    return jsonify(topic), 201
-
-# ---------- Conteúdo adulto (lista os itens detectados) ----------
-@app.route("/conteudo/adulto")
-def conteudo_adulto():
-    # retorna filmes + series que o detector marcou
-    films = xtream_api("get_vod_streams")
-    series = xtream_api("get_series")
-    adult_items = []
-
-    for item in (films or []):
-        if is_adult_item(item):
-            adult_items.append({"tipo": "filme", "id": item.get("stream_id"), "titulo": item.get("name")})
-
-    for item in (series or []):
-        if is_adult_item(item):
-            adult_items.append({"tipo": "serie", "id": item.get("series_id"), "titulo": item.get("name")})
-
-    return jsonify({"total": len(adult_items), "items": adult_items})
-
-# ---------- Handler para Vercel ----------
-def handler(request):
-    from flask import Request, Response
-    import json
+# ---------- Handler principal para Vercel ----------
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.handle_request('GET')
     
-    # Converter o request do Vercel para o do Flask
-    flask_request = Request.from_values(
-        path=request.path,
-        method=request.method,
-        headers=request.headers,
-        query_string=request.query_string,
-        data=request.body
-    )
+    def do_POST(self):
+        self.handle_request('POST')
     
-    with app.request_context(flask_request.environ):
+    def handle_request(self, method):
         try:
-            response = app.full_dispatch_request()
-            return Response(
-                response=response.get_data(),
-                status=response.status_code,
-                headers=dict(response.headers)
-            )
+            path = self.path.split('?')[0]
+            query_params = parse_qs(urlparse(self.path).query)
+            
+            # Headers
+            headers = dict(self.headers)
+            
+            # Body para POST
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else b''
+            
+            # Processar a requisição
+            response = self.process_route(path, method, query_params, headers, body)
+            
+            # Enviar resposta
+            self.send_response(response['status'])
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.end_headers()
+            
+            self.wfile.write(json.dumps(response['body']).encode('utf-8'))
+            
         except Exception as e:
-            return Response(
-                response=json.dumps({"error": str(e)}),
-                status=500,
-                headers={"Content-Type": "application/json"}
-            )
+            logger.exception("Erro no handler")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"erro": "Internal Server Error", "detalhe": str(e)}).encode('utf-8'))
+    
+    def process_route(self, path, method, query_params, headers, body):
+        dominio = get_dominio_from_headers(headers)
+        
+        # Rota principal
+        if path == '/':
+            return {
+                'status': 200,
+                'body': {
+                    "rotas": {
+                        "filmes": {"todos": f"{dominio}/filmes", "categorias": f"{dominio}/filmes/categorias"},
+                        "series": {"todos": f"{dominio}/series", "categorias": f"{dominio}/series/categorias"},
+                        "detalhes": f"{dominio}/detalhes?titulo=TITULO&tipo=[filme|serie]",
+                        "forum": f"{dominio}/forum"
+                    }
+                }
+            }
+        
+        # Filmes
+        elif path == '/filmes':
+            adult_param = query_params.get('adult', [None])[0]
+            data = xtream_api("get_vod_streams")
+            
+            if not isinstance(data, list):
+                data = []
+
+            items = []
+            for item in data:
+                try:
+                    entry = {
+                        "id": item.get('stream_id'),
+                        "titulo": item.get('name'),
+                        "ano": item.get('release_year'),
+                        "capa": item.get('cover'),
+                        "player": f"{dominio}/player/{generate_slug(item.get('name',''), item.get('stream_id'))}.mp4?id={item.get('stream_id')}&type=movie",
+                        "detalhes": f"{dominio}/detalhes?titulo={item.get('name')}&tipo=filme",
+                        "raw": item
+                    }
+                    items.append(entry)
+                except Exception:
+                    logger.exception("Erro ao processar item de filmes")
+
+            if adult_param == "1":
+                items = [i for i in items if is_adult_item(i.get("raw", {}))]
+            elif adult_param == "0":
+                items = [i for i in items if not is_adult_item(i.get("raw", {}))]
+
+            return {'status': 200, 'body': items}
+        
+        # Categorias de filmes
+        elif path == '/filmes/categorias':
+            cats = xtream_api("get_vod_categories")
+            if not isinstance(cats, list):
+                cats = []
+            return {'status': 200, 'body': [{
+                "id": cat.get('category_id'),
+                "nome": cat.get('category_name'),
+                "url": f"{dominio}/filmes/categoria/{cat.get('category_id')}"
+            } for cat in cats]}
+        
+        # Séries
+        elif path == '/series':
+            data = xtream_api("get_series")
+            if not isinstance(data, list):
+                data = []
+            return {'status': 200, 'body': [{
+                "id": item.get('series_id'),
+                "titulo": item.get('name'),
+                "temporadas": f"{dominio}/series/{item.get('series_id')}/temporadas",
+                "capa": item.get('cover')
+            } for item in data]}
+        
+        # Categorias de séries
+        elif path == '/series/categorias':
+            cats = xtream_api("get_series_categories")
+            if not isinstance(cats, list):
+                cats = []
+            return {'status': 200, 'body': [{
+                "id": cat.get('category_id'),
+                "nome": cat.get('category_name'),
+                "url": f"{dominio}/series/categoria/{cat.get('category_id')}"
+            } for cat in cats]}
+        
+        # Detalhes TMDB
+        elif path == '/detalhes':
+            titulo = query_params.get('titulo', [None])[0]
+            tipo = query_params.get('tipo', [None])[0]
+            
+            if not titulo or not tipo:
+                return {'status': 400, 'body': {"erro": "Parâmetros obrigatórios: titulo e tipo"}}
+            
+            try:
+                search_type = "movie" if tipo.lower() == "filme" else "tv"
+                search_url = f"https://api.themoviedb.org/3/search/{search_type}"
+                search_params = {"api_key": TMDB_API_KEY, "query": titulo, "language": "pt-BR"}
+                search_res = requests.get(search_url, params=search_params, timeout=10).json()
+                
+                if not search_res.get("results"):
+                    return {'status': 404, 'body': {"erro": "Título não encontrado no TMDb"}}
+                
+                item = search_res["results"][0]
+                tmdb_id = item["id"]
+                
+                details_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}", 
+                                         params={"api_key": TMDB_API_KEY, "language": "pt-BR"}, timeout=10).json()
+                
+                credits_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits",
+                                         params={"api_key": TMDB_API_KEY, "language": "pt-BR"}, timeout=10).json()
+                
+                elenco = [ator.get("name") for ator in credits_res.get("cast", [])[:10]]
+                diretores = [p.get("name") for p in credits_res.get("crew", []) if p.get("job") == "Director"]
+                
+                return {'status': 200, 'body': {
+                    "titulo": details_res.get("title") or details_res.get("name"),
+                    "titulo_original": details_res.get("original_title") or details_res.get("original_name"),
+                    "descricao": details_res.get("overview"),
+                    "ano": (details_res.get("release_date") or details_res.get("first_air_date") or "")[:4],
+                    "generos": [g.get("name") for g in details_res.get("genres", [])],
+                    "nota": details_res.get("vote_average"),
+                    "poster": f"https://image.tmdb.org/t/p/w500{details_res.get('poster_path')}" if details_res.get("poster_path") else None,
+                    "elenco": elenco,
+                    "diretores": diretores
+                }}
+                
+            except Exception as e:
+                logger.exception("Erro ao obter detalhes TMDB")
+                return {'status': 500, 'body': {"erro": "Erro ao obter detalhes", "detalhe": str(e)}}
+        
+        # Fórum - GET
+        elif path == '/forum' and method == 'GET':
+            page = max(1, int(query_params.get('page', [1])[0]))
+            per_page = max(1, min(100, int(query_params.get('per_page', [10])[0])))
+            start = (page - 1) * per_page
+            end = start + per_page
+            
+            return {'status': 200, 'body': {
+                "total": len(FORUM_TOPICS),
+                "page": page,
+                "per_page": per_page,
+                "items": FORUM_TOPICS[start:end]
+            }}
+        
+        # Fórum - POST
+        elif path == '/forum' and method == 'POST':
+            try:
+                data = json.loads(body.decode('utf-8')) if body else {}
+                if not data or not data.get("titulo") or not data.get("conteudo"):
+                    return {'status': 400, 'body': {"erro": "JSON com 'titulo' e 'conteudo' obrigatórios"}}
+                
+                topic_id = len(FORUM_TOPICS) + 1
+                topic = {
+                    "id": topic_id,
+                    "titulo": data.get("titulo"),
+                    "conteudo": data.get("conteudo"),
+                    "autor": data.get("autor") or "anon",
+                    "criado_em": data.get("criado_em") or ""
+                }
+                FORUM_TOPICS.append(topic)
+                
+                return {'status': 201, 'body': topic}
+                
+            except json.JSONDecodeError:
+                return {'status': 400, 'body': {"erro": "JSON inválido"}}
+        
+        # Rota não encontrada
+        else:
+            return {'status': 404, 'body': {"erro": "Rota não encontrada"}}
 
 # ---------- Para desenvolvimento local ----------
 if __name__ == "__main__":
-    app.run(debug=True)
+    from http.server import HTTPServer
+    server = HTTPServer(('localhost', 3000), handler)
+    print("Servidor rodando em http://localhost:3000")
+    server.serve_forever()
