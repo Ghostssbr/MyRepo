@@ -9,9 +9,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Configurações
-USERNAME = "Sidney0011"
-PASSWORD = "sid09105245"
-BASE_URL = "https://new.pionner.pro/player_api.php"
+USERNAME = "712716141"
+PASSWORD = "169811938"
+BASE_URL = "https://huloftibu.lol/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
 # Utilitários
@@ -196,7 +196,7 @@ def player(slug):
     if not media_id or media_type not in ["movie", "series"]:
         return jsonify({"error": "Parâmetros inválidos"}), 400
 
-    return redirect(f"https://new.pionner.pro/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
+    return redirect(f"https://huloftibu.lol/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
 
 # Página inicial com as rotas disponíveis
 @app.route("/")
@@ -220,4 +220,4 @@ def index():
             "player": f"{dominio}/player/<SLUG>.mp4?id=ID&type=[movie|series]"
         }
     })
-    
+        
