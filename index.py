@@ -1,6 +1,4 @@
 from http.server import BaseHTTPRequestHandler
-from flask import Flask, jsonify, redirect, request
-from flask_cors import CORS
 import requests
 import hashlib
 import re
@@ -9,20 +7,16 @@ import json
 from typing import List, Dict
 from urllib.parse import urlparse, parse_qs
 
-# ---------- Configurações ----------
 USERNAME = "Sidney0011"
 PASSWORD = "sid09105245"
 BASE_URL = "http://new.pionner.pro:8080/player_api.php"
 TMDB_API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
-# ---------- Logging ----------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
-# ---------- Fórum simples (em memória) ----------
 FORUM_TOPICS: List[Dict] = []
 
-# ---------- Utilitários ----------
 def safe_json(resp: requests.Response):
     try:
         return resp.json()
@@ -67,7 +61,6 @@ def get_dominio_from_headers(headers):
         return f"https://{host}"
     return "http://localhost:3000"
 
-# ---------- Handler principal para Vercel ----------
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.handle_request('GET')
@@ -80,17 +73,13 @@ class handler(BaseHTTPRequestHandler):
             path = self.path.split('?')[0]
             query_params = parse_qs(urlparse(self.path).query)
             
-            # Headers
             headers = dict(self.headers)
             
-            # Body para POST
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length) if content_length > 0 else b''
             
-            # Processar a requisição
             response = self.process_route(path, method, query_params, headers, body)
             
-            # Enviar resposta
             self.send_response(response['status'])
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -110,7 +99,6 @@ class handler(BaseHTTPRequestHandler):
     def process_route(self, path, method, query_params, headers, body):
         dominio = get_dominio_from_headers(headers)
         
-        # Rota principal
         if path == '/':
             return {
                 'status': 200,
@@ -124,7 +112,6 @@ class handler(BaseHTTPRequestHandler):
                 }
             }
         
-        # Filmes
         elif path == '/filmes':
             adult_param = query_params.get('adult', [None])[0]
             data = xtream_api("get_vod_streams")
@@ -155,7 +142,6 @@ class handler(BaseHTTPRequestHandler):
 
             return {'status': 200, 'body': items}
         
-        # Categorias de filmes
         elif path == '/filmes/categorias':
             cats = xtream_api("get_vod_categories")
             if not isinstance(cats, list):
@@ -166,7 +152,6 @@ class handler(BaseHTTPRequestHandler):
                 "url": f"{dominio}/filmes/categoria/{cat.get('category_id')}"
             } for cat in cats]}
         
-        # Séries
         elif path == '/series':
             data = xtream_api("get_series")
             if not isinstance(data, list):
@@ -178,7 +163,6 @@ class handler(BaseHTTPRequestHandler):
                 "capa": item.get('cover')
             } for item in data]}
         
-        # Categorias de séries
         elif path == '/series/categorias':
             cats = xtream_api("get_series_categories")
             if not isinstance(cats, list):
@@ -189,7 +173,6 @@ class handler(BaseHTTPRequestHandler):
                 "url": f"{dominio}/series/categoria/{cat.get('category_id')}"
             } for cat in cats]}
         
-        # Detalhes TMDB
         elif path == '/detalhes':
             titulo = query_params.get('titulo', [None])[0]
             tipo = query_params.get('tipo', [None])[0]
@@ -234,7 +217,6 @@ class handler(BaseHTTPRequestHandler):
                 logger.exception("Erro ao obter detalhes TMDB")
                 return {'status': 500, 'body': {"erro": "Erro ao obter detalhes", "detalhe": str(e)}}
         
-        # Fórum - GET
         elif path == '/forum' and method == 'GET':
             page = max(1, int(query_params.get('page', [1])[0]))
             per_page = max(1, min(100, int(query_params.get('per_page', [10])[0])))
@@ -248,7 +230,6 @@ class handler(BaseHTTPRequestHandler):
                 "items": FORUM_TOPICS[start:end]
             }}
         
-        # Fórum - POST
         elif path == '/forum' and method == 'POST':
             try:
                 data = json.loads(body.decode('utf-8')) if body else {}
@@ -270,13 +251,5 @@ class handler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 return {'status': 400, 'body': {"erro": "JSON inválido"}}
         
-        # Rota não encontrada
         else:
             return {'status': 404, 'body': {"erro": "Rota não encontrada"}}
-
-# ---------- Para desenvolvimento local ----------
-if __name__ == "__main__":
-    from http.server import HTTPServer
-    server = HTTPServer(('localhost', 3000), handler)
-    print("Servidor rodando em http://localhost:3000")
-    server.serve_forever()
