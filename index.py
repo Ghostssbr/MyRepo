@@ -262,36 +262,6 @@ def index():
     dominio = request.host_url.rstrip('/')
     return jsonify({
         "rotas": {
-            "filmes":{"todos": f"{dominio}/filmes","categorias": f"{dominio}/filmes/categorias","por_categoria": f"{dominio}/filmes/categoria/<ID>"},
-            "series":{"todos": f"{dominio}/series","categorias": f"{dominioage"),
-            "votos": details_res.get("vote_count"),
-            "idiomas": details_res.get("spoken_languages"),
-            "poster": f"https://image.tmdb.org/t/p/w500{details_res.get('poster_path')}" if details_res.get("poster_path") else None,
-            "banner": f"https://image.tmdb.org/t/p/original{details_res.get('backdrop_path')}" if details_res.get("backdrop_path") else None,
-            "elenco": elenco,
-            "diretores": diretores,
-            "criadores": criadores,
-            "trailer_youtube": f"https://www.youtube.com/watch?v={trailer_key}" if trailer_key else None
-        })
-    except Exception as e:
-        logger.exception("Erro ao obter detalhes TMDB")
-        return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
-
-
-@app.route("/player/<slug>.mp4")
-def player(slug):
-    media_id = request.args.get("id")
-    media_type = request.args.get("type")
-    if not media_id or media_type not in ["movie", "series"]:
-        return jsonify({"error": "Parâmetros inválidos"}), 400
-    # exemplo de redirect (ajuste domínio/URL conforme seu serviço)
-    return redirect(f"https://finstv.wtf/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
-
-@app.route("/")
-def index():
-    dominio = request.host_url.rstrip('/')
-    return jsonify({
-        "rotas": {
             "filmes": {
                 "todos": f"{dominio}/filmes",
                 "categorias": f"{dominio}/filmes/categorias",
@@ -313,6 +283,7 @@ def index():
             "conteudo_adulto": f"{dominio}/conteudo/adulto"
         }
     })
+
 # ---------- Endpoints do fórum ----------
 @app.route("/forum", methods=["GET"])
 def forum_list():
@@ -361,4 +332,3 @@ def conteudo_adulto():
             adult_items.append({"tipo": "serie", "id": item.get("series_id"), "titulo": item.get("name")})
 
     return jsonify({"total": len(adult_items), "items": adult_items})
-
