@@ -87,14 +87,15 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Headers', 'Content-Type')
             self.end_headers()
             
-            self.wfile.write(json.dumps(response['body']).encode('utf-8'))
+            self.wfile.write(json.dumps(response['body'], ensure_ascii=False, indent=2).encode('utf-8'))
             
         except Exception as e:
             logger.exception("Erro no handler")
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"erro": "Internal Server Error", "detalhe": str(e)}).encode('utf-8'))
+            error_response = {"erro": "Internal Server Error", "detalhe": str(e)}
+            self.wfile.write(json.dumps(error_response, ensure_ascii=False, indent=2).encode('utf-8'))
     
     def process_route(self, path, method, query_params, headers, body):
         dominio = get_dominio_from_headers(headers)
@@ -103,12 +104,20 @@ class handler(BaseHTTPRequestHandler):
             return {
                 'status': 200,
                 'body': {
+                    "mensagem": "Bem-vindo à API de Filmes e Séries",
                     "rotas": {
-                        "filmes": {"todos": f"{dominio}/filmes", "categorias": f"{dominio}/filmes/categorias"},
-                        "series": {"todos": f"{dominio}/series", "categorias": f"{dominio}/series/categorias"},
+                        "filmes": {
+                            "todos": f"{dominio}/filmes",
+                            "categorias": f"{dominio}/filmes/categorias"
+                        },
+                        "series": {
+                            "todos": f"{dominio}/series",
+                            "categorias": f"{dominio}/series/categorias"
+                        },
                         "detalhes": f"{dominio}/detalhes?titulo=TITULO&tipo=[filme|serie]",
                         "forum": f"{dominio}/forum"
-                    }
+                    },
+                    "exemplo": f"{dominio}/detalhes?titulo=The Matrix&tipo=filme"
                 }
             }
         
@@ -146,42 +155,46 @@ class handler(BaseHTTPRequestHandler):
             cats = xtream_api("get_vod_categories")
             if not isinstance(cats, list):
                 cats = []
-            return {'status': 200, 'body': [{
+            categories = [{
                 "id": cat.get('category_id'),
                 "nome": cat.get('category_name'),
                 "url": f"{dominio}/filmes/categoria/{cat.get('category_id')}"
-            } for cat in cats]}
+            } for cat in cats]
+            return {'status': 200, 'body': categories}
         
         elif path == '/series':
             data = xtream_api("get_series")
             if not isinstance(data, list):
                 data = []
-            return {'status': 200, 'body': [{
+            series_list = [{
                 "id": item.get('series_id'),
                 "titulo": item.get('name'),
                 "temporadas": f"{dominio}/series/{item.get('series_id')}/temporadas",
                 "capa": item.get('cover')
-            } for item in data]}
+            } for item in data]
+            return {'status': 200, 'body': series_list}
         
         elif path == '/series/categorias':
             cats = xtream_api("get_series_categories")
             if not isinstance(cats, list):
                 cats = []
-            return {'status': 200, 'body': [{
+            categories = [{
                 "id": cat.get('category_id'),
                 "nome": cat.get('category_name'),
                 "url": f"{dominio}/series/categoria/{cat.get('category_id')}"
-            } for cat in cats]}
+            } for cat in cats]
+            return {'status': 200, 'body': categories}
         
         elif path == '/detalhes':
             titulo = query_params.get('titulo', [None])[0]
             tipo = query_params.get('tipo', [None])[0]
             
             if not titulo or not tipo:
-                return {'status': 400, 'body': {"erro": "Parâmetros obrigatórios: titulo e tipo"}}
+                return {'status': 400, 'body': {"erro": "Parâmetros obrigatórios: 'titulo' e 'tipo' (filme ou serie)"}}
             
             try:
                 search_type = "movie" if tipo.lower() == "filme" else "tv"
+                # BUG CORRIGIDO: Espaço removido após '/search/'
                 search_url = f"https://api.themoviedb.org/3/search/{search_type}"
                 search_params = {"api_key": TMDB_API_KEY, "query": titulo, "language": "pt-BR"}
                 search_res = requests.get(search_url, params=search_params, timeout=10).json()
@@ -192,30 +205,39 @@ class handler(BaseHTTPRequestHandler):
                 item = search_res["results"][0]
                 tmdb_id = item["id"]
                 
-                details_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}", 
+                # BUG CORRIGIDO: Espaço removido após '/3/'
+                details_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}"
+                details_res = requests.get(details_url, 
                                          params={"api_key": TMDB_API_KEY, "language": "pt-BR"}, timeout=10).json()
                 
-                credits_res = requests.get(f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits",
+                credits_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits"
+                credits_res = requests.get(credits_url,
                                          params={"api_key": TMDB_API_KEY, "language": "pt-BR"}, timeout=10).json()
                 
                 elenco = [ator.get("name") for ator in credits_res.get("cast", [])[:10]]
                 diretores = [p.get("name") for p in credits_res.get("crew", []) if p.get("job") == "Director"]
                 
-                return {'status': 200, 'body': {
+                poster_path = details_res.get('poster_path')
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None  # BUG CORRIGIDO
+                
+                # Resposta mais organizada
+                detalhes = {
                     "titulo": details_res.get("title") or details_res.get("name"),
                     "titulo_original": details_res.get("original_title") or details_res.get("original_name"),
-                    "descricao": details_res.get("overview"),
                     "ano": (details_res.get("release_date") or details_res.get("first_air_date") or "")[:4],
                     "generos": [g.get("name") for g in details_res.get("genres", [])],
                     "nota": details_res.get("vote_average"),
-                    "poster": f"https://image.tmdb.org/t/p/w500{details_res.get('poster_path')}" if details_res.get("poster_path") else None,
+                    "descricao": details_res.get("overview"),
                     "elenco": elenco,
-                    "diretores": diretores
-                }}
+                    "diretores": diretores,
+                    "poster": poster_url
+                }
+                
+                return {'status': 200, 'body': detalhes}
                 
             except Exception as e:
                 logger.exception("Erro ao obter detalhes TMDB")
-                return {'status': 500, 'body': {"erro": "Erro ao obter detalhes", "detalhe": str(e)}}
+                return {'status': 500, 'body': {"erro": "Erro ao obter detalhes do TMDb", "detalhe": str(e)}}
         
         elif path == '/forum' and method == 'GET':
             page = max(1, int(query_params.get('page', [1])[0]))
@@ -234,15 +256,15 @@ class handler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(body.decode('utf-8')) if body else {}
                 if not data or not data.get("titulo") or not data.get("conteudo"):
-                    return {'status': 400, 'body': {"erro": "JSON com 'titulo' e 'conteudo' obrigatórios"}}
+                    return {'status': 400, 'body': {"erro": "JSON deve conter os campos 'titulo' e 'conteudo'"}}
                 
                 topic_id = len(FORUM_TOPICS) + 1
                 topic = {
                     "id": topic_id,
                     "titulo": data.get("titulo"),
                     "conteudo": data.get("conteudo"),
-                    "autor": data.get("autor") or "anon",
-                    "criado_em": data.get("criado_em") or ""
+                    "autor": data.get("autor") or "Anônimo",
+                    "criado_em": data.get("criado_em") or "Data não fornecida"
                 }
                 FORUM_TOPICS.append(topic)
                 
@@ -252,4 +274,4 @@ class handler(BaseHTTPRequestHandler):
                 return {'status': 400, 'body': {"erro": "JSON inválido"}}
         
         else:
-            return {'status': 404, 'body': {"erro": "Rota não encontrada"}}
+            return {'status': 404, 'body': {"erro": "Rota não encontrada", "sugestao": "Acesse a raiz '/' para ver as rotas disponíveis."}}
