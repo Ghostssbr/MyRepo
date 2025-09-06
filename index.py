@@ -277,7 +277,7 @@ def index():
         logger.exception("Erro ao obter detalhes TMDB")
         return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
 
-# ---------- Player (redirecionamento) ----------
+
 @app.route("/player/<slug>.mp4")
 def player(slug):
     media_id = request.args.get("id")
@@ -287,7 +287,6 @@ def player(slug):
     # exemplo de redirect (ajuste domínio/URL conforme seu serviço)
     return redirect(f"https://finstv.wtf/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
 
-# ---------- Página inicial com rotas ----------
 @app.route("/")
 def index():
     dominio = request.host_url.rstrip('/')
@@ -314,7 +313,6 @@ def index():
             "conteudo_adulto": f"{dominio}/conteudo/adulto"
         }
     })
-
 # ---------- Endpoints do fórum ----------
 @app.route("/forum", methods=["GET"])
 def forum_list():
