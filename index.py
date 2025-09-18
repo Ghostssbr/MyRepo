@@ -9,9 +9,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Configurações
-USERNAME = "andrey0784"
-PASSWORD = "a51991420784"
-BASE_URL = "https://hmiguel5.org:8080/player_api.php"
+USERNAME = "999147929"
+PASSWORD = "sm20241028s"
+BASE_URL = "http://new.pionner.pro:8080/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
 # Utilitários
@@ -192,7 +192,7 @@ def player(slug):
     if not media_id or media_type not in ["movie", "series"]:
         return jsonify({"error": "Parâmetros inválidos"}), 400
 
-    return redirect(f"https://hmiguel5.org:8080/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
+    return redirect(f"http://new.pionner.pro:8080/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
 
 # Página inicial com as rotas disponíveis
 @app.route("/")
