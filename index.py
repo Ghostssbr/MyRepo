@@ -8,13 +8,11 @@ import tmdbsimple as tmdb
 app = Flask(__name__)
 CORS(app)
 
-# Configurações
 USERNAME = "999147929"
 PASSWORD = "sm20241028s"
-BASE_URL = "http://new.pionner.pro:8080/player_api.php"
+BASE_URL = "https://new.pionner.pro/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
-# Utilitários
 def xtream_api(action, extra=""):
     url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
     return requests.get(url, timeout=10).json()
@@ -27,12 +25,10 @@ def slugify(text):
 def generate_slug(title, media_id):
     return f"{slugify(title)}-{hashlib.md5(str(media_id).encode()).hexdigest()[:6]}"
 
-# Rotas de Filmes
 @app.route("/filmes")
 def filmes():
     data = xtream_api("get_vod_streams")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": item['stream_id'],
         "titulo": item['name'],
@@ -46,7 +42,6 @@ def filmes():
 def filmes_categorias():
     cats = xtream_api("get_vod_categories")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": cat['category_id'],
         "nome": cat['category_name'],
@@ -57,19 +52,16 @@ def filmes_categorias():
 def filmes_por_categoria(cat_id):
     data = xtream_api("get_vod_streams", f"&category_id={cat_id}")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": item['stream_id'],
         "titulo": item['name'],
         "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4?id={item['stream_id']}&type=movie"
     } for item in data])
 
-# Rotas de Séries
 @app.route("/series")
 def series():
     data = xtream_api("get_series")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": item['series_id'],
         "titulo": item['name'],
@@ -81,7 +73,6 @@ def series():
 def series_categorias():
     cats = xtream_api("get_series_categories")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": cat['category_id'],
         "nome": cat['category_name'],
@@ -92,7 +83,6 @@ def series_categorias():
 def series_por_categoria(cat_id):
     data = xtream_api("get_series", f"&category_id={cat_id}")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": item['series_id'],
         "titulo": item['name'],
@@ -103,7 +93,6 @@ def series_por_categoria(cat_id):
 def serie_temporadas(serie_id):
     data = xtream_api("get_series_info", f"&series_id={serie_id}")
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "numero": int(num),
         "episodios": f"{dominio}/series/{serie_id}/temporadas/{num}/episodios"
@@ -114,7 +103,6 @@ def serie_episodios(serie_id, temp_num):
     data = xtream_api("get_series_info", f"&series_id={serie_id}")
     episodios = data.get('episodes', {}).get(str(temp_num), [])
     dominio = request.host_url.rstrip('/')
-    
     return jsonify([{
         "id": ep['id'],
         "titulo": ep['title'],
@@ -122,44 +110,31 @@ def serie_episodios(serie_id, temp_num):
         "player": f"{dominio}/player/{generate_slug(ep['title'], ep['id'])}.mp4?id={ep['id']}&type=series"
     } for ep in episodios])
 
-# Rota de Detalhes via TMDB
 @app.route('/detalhes')
 def detalhes():
     titulo = request.args.get("titulo")
-    tipo = request.args.get("tipo")  # filme ou serie
-
+    tipo = request.args.get("tipo")
     if not titulo or not tipo:
         return jsonify({"erro": "Parâmetros obrigatórios: titulo e tipo"}), 400
-
     try:
         search_type = "movie" if tipo == "filme" else "tv"
         search_url = f"https://api.themoviedb.org/3/search/{search_type}"
-        search_params = {
-            "api_key":tmdb.API_KEY,
-            "query": titulo,
-            "language": "pt-BR"
-        }
+        search_params = {"api_key":tmdb.API_KEY,"query": titulo,"language": "pt-BR"}
         search_res = requests.get(search_url, params=search_params).json()
         if not search_res.get("results"):
             return jsonify({"erro": "Título não encontrado no TMDb"}), 404
-
         item = search_res["results"][0]
         tmdb_id = item["id"]
-
         details_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}"
         details_res = requests.get(details_url, params={"api_key": tmdb.API_KEY, "language": "pt-BR"}).json()
-
         credits_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits"
         credits_res = requests.get(credits_url, params={"api_key": tmdb.API_KEY, "language": "pt-BR"}).json()
-        
         elenco = [ator["name"] for ator in credits_res.get("cast", [])[:10]]
         diretores = [p["name"] for p in credits_res.get("crew", []) if p["job"] == "Director"]
         criadores = [p["name"] for p in details_res.get("created_by", [])]
-
         videos_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/videos"
         videos_res = requests.get(videos_url, params={"api_key": tmdb.API_KEY}).json()
         trailer_key = next((v["key"] for v in videos_res.get("results", []) if v["type"] == "Trailer" and v["site"] == "YouTube"), None)
-
         return jsonify({
             "titulo": details_res.get("title") or details_res.get("name"),
             "titulo_original": details_res.get("original_title") or details_res.get("original_name"),
@@ -179,22 +154,17 @@ def detalhes():
             "criadores": criadores,
             "trailer_youtube": f"https://www.youtube.com/watch?v={trailer_key}" if trailer_key else None
         })
-
     except Exception as e:
         return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
 
-# Rota do player corrigida
 @app.route("/player/<slug>.mp4")
 def player(slug):
     media_id = request.args.get("id")
     media_type = request.args.get("type")
-
     if not media_id or media_type not in ["movie", "series"]:
         return jsonify({"error": "Parâmetros inválidos"}), 400
+    return redirect(f"https://new.pionner.pro/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
 
-    return redirect(f"http://new.pionner.pro:8080/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
-
-# Página inicial com as rotas disponíveis
 @app.route("/")
 def index():
     dominio = request.host_url.rstrip('/')
