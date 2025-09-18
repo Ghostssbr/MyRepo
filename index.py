@@ -9,9 +9,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Configurações
-USERNAME = "712716141"
-PASSWORD = "169811938"
-BASE_URL = "https://huloftibu.lol/player_api.php"
+USERNAME = "andrey0784"
+PASSWORD = "a51991420784"
+BASE_URL = "https://hmiguel5.org:8080/player_api.php"
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
 # Utilitários
@@ -132,7 +132,6 @@ def detalhes():
         return jsonify({"erro": "Parâmetros obrigatórios: titulo e tipo"}), 400
 
     try:
-        # 1. Buscar pelo título
         search_type = "movie" if tipo == "filme" else "tv"
         search_url = f"https://api.themoviedb.org/3/search/{search_type}"
         search_params = {
@@ -147,11 +146,9 @@ def detalhes():
         item = search_res["results"][0]
         tmdb_id = item["id"]
 
-        # 2. Detalhes
         details_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}"
         details_res = requests.get(details_url, params={"api_key": tmdb.API_KEY, "language": "pt-BR"}).json()
 
-        # 3. Créditos (elenco e equipe)
         credits_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/credits"
         credits_res = requests.get(credits_url, params={"api_key": tmdb.API_KEY, "language": "pt-BR"}).json()
         
@@ -159,7 +156,6 @@ def detalhes():
         diretores = [p["name"] for p in credits_res.get("crew", []) if p["job"] == "Director"]
         criadores = [p["name"] for p in details_res.get("created_by", [])]
 
-        # 4. Trailer
         videos_url = f"https://api.themoviedb.org/3/{search_type}/{tmdb_id}/videos"
         videos_res = requests.get(videos_url, params={"api_key": tmdb.API_KEY}).json()
         trailer_key = next((v["key"] for v in videos_res.get("results", []) if v["type"] == "Trailer" and v["site"] == "YouTube"), None)
@@ -196,7 +192,7 @@ def player(slug):
     if not media_id or media_type not in ["movie", "series"]:
         return jsonify({"error": "Parâmetros inválidos"}), 400
 
-    return redirect(f"https://huloftibu.lol/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
+    return redirect(f"https://hmiguel5.org:8080/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
 
 # Página inicial com as rotas disponíveis
 @app.route("/")
@@ -220,4 +216,3 @@ def index():
             "player": f"{dominio}/player/<SLUG>.mp4?id=ID&type=[movie|series]"
         }
     })
-        
