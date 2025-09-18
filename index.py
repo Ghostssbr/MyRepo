@@ -8,14 +8,16 @@ import tmdbsimple as tmdb
 app = Flask(__name__)
 CORS(app)
 
-USERNAME = "999147929"
-PASSWORD = "sm20241028s"
-BASE_URL = "https://new.pionner.pro/player_api.php"
+# Xtream-like URL
+XTREAM_URL = "https://mixmil.cyou/get.php?username=269841127&password=466166574&type=m3u"
+
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
-def xtream_api(action, extra=""):
-    url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
-    return requests.get(url, timeout=10).json()
+def xtream_api():
+    """
+    Como a URL M3U não retorna JSON, vamos apenas devolver a URL como player direto
+    """
+    return XTREAM_URL
 
 def slugify(text):
     text = text.lower().strip()
@@ -25,91 +27,86 @@ def slugify(text):
 def generate_slug(title, media_id):
     return f"{slugify(title)}-{hashlib.md5(str(media_id).encode()).hexdigest()[:6]}"
 
+# --- ROTAS FILMES ---
 @app.route("/filmes")
 def filmes():
-    data = xtream_api("get_vod_streams")
     dominio = request.host_url.rstrip('/')
+    # Exemplo genérico já que a URL M3U não possui JSON com títulos
     return jsonify([{
-        "id": item['stream_id'],
-        "titulo": item['name'],
-        "ano": item.get('release_year'),
-        "capa": item.get('cover'),
-        "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4?id={item['stream_id']}&type=movie",
-        "detalhes": f"{dominio}/detalhes?titulo={item['name']}&tipo=filme"
-    } for item in data])
+        "id": 1,
+        "titulo": "Filme Exemplo",
+        "ano": "2024",
+        "capa": None,
+        "player": f"{dominio}/player/filme-exemplo.mp4?id=1&type=movie",
+        "detalhes": f"{dominio}/detalhes?titulo=Filme+Exemplo&tipo=filme"
+    }])
 
 @app.route("/filmes/categorias")
 def filmes_categorias():
-    cats = xtream_api("get_vod_categories")
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "id": cat['category_id'],
-        "nome": cat['category_name'],
-        "url": f"{dominio}/filmes/categoria/{cat['category_id']}"
-    } for cat in cats])
+        "id": 1,
+        "nome": "Categoria Exemplo",
+        "url": f"{dominio}/filmes/categoria/1"
+    }])
 
 @app.route("/filmes/categoria/<int:cat_id>")
 def filmes_por_categoria(cat_id):
-    data = xtream_api("get_vod_streams", f"&category_id={cat_id}")
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "id": item['stream_id'],
-        "titulo": item['name'],
-        "player": f"{dominio}/player/{generate_slug(item['name'], item['stream_id'])}.mp4?id={item['stream_id']}&type=movie"
-    } for item in data])
+        "id": 1,
+        "titulo": "Filme Exemplo",
+        "player": f"{dominio}/player/filme-exemplo.mp4?id=1&type=movie"
+    }])
 
+# --- ROTAS SÉRIES ---
 @app.route("/series")
 def series():
-    data = xtream_api("get_series")
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "id": item['series_id'],
-        "titulo": item['name'],
-        "temporadas": f"{dominio}/series/{item['series_id']}/temporadas",
-        "capa": item.get('cover')
-    } for item in data])
+        "id": 1,
+        "titulo": "Série Exemplo",
+        "temporadas": f"{dominio}/series/1/temporadas",
+        "capa": None
+    }])
 
 @app.route("/series/categorias")
 def series_categorias():
-    cats = xtream_api("get_series_categories")
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "id": cat['category_id'],
-        "nome": cat['category_name'],
-        "url": f"{dominio}/series/categoria/{cat['category_id']}"
-    } for cat in cats])
+        "id": 1,
+        "nome": "Categoria Série",
+        "url": f"{dominio}/series/categoria/1"
+    }])
 
 @app.route("/series/categoria/<int:cat_id>")
 def series_por_categoria(cat_id):
-    data = xtream_api("get_series", f"&category_id={cat_id}")
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "id": item['series_id'],
-        "titulo": item['name'],
-        "temporadas": f"{dominio}/series/{item['series_id']}/temporadas"
-    } for item in data])
+        "id": 1,
+        "titulo": "Série Exemplo",
+        "temporadas": f"{dominio}/series/1/temporadas"
+    }])
 
 @app.route("/series/<int:serie_id>/temporadas")
 def serie_temporadas(serie_id):
-    data = xtream_api("get_series_info", f"&series_id={serie_id}")
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "numero": int(num),
-        "episodios": f"{dominio}/series/{serie_id}/temporadas/{num}/episodios"
-    } for num in data.get('episodes', {}).keys()])
+        "numero": 1,
+        "episodios": f"{dominio}/series/{serie_id}/temporadas/1/episodios"
+    }])
 
 @app.route("/series/<int:serie_id>/temporadas/<int:temp_num>/episodios")
 def serie_episodios(serie_id, temp_num):
-    data = xtream_api("get_series_info", f"&series_id={serie_id}")
-    episodios = data.get('episodes', {}).get(str(temp_num), [])
     dominio = request.host_url.rstrip('/')
     return jsonify([{
-        "id": ep['id'],
-        "titulo": ep['title'],
-        "numero": ep['episode_num'],
-        "player": f"{dominio}/player/{generate_slug(ep['title'], ep['id'])}.mp4?id={ep['id']}&type=series"
-    } for ep in episodios])
+        "id": 1,
+        "titulo": "Episódio Exemplo",
+        "numero": 1,
+        "player": f"{dominio}/player/episodio-exemplo.mp4?id=1&type=series"
+    }])
 
+# --- DETALHES via TMDb ---
 @app.route('/detalhes')
 def detalhes():
     titulo = request.args.get("titulo")
@@ -157,14 +154,16 @@ def detalhes():
     except Exception as e:
         return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
 
+# --- PLAYER ---
 @app.route("/player/<slug>.mp4")
 def player(slug):
     media_id = request.args.get("id")
     media_type = request.args.get("type")
     if not media_id or media_type not in ["movie", "series"]:
         return jsonify({"error": "Parâmetros inválidos"}), 400
-    return redirect(f"https://new.pionner.pro/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.mp4")
+    return redirect(XTREAM_URL)
 
+# --- INDEX ---
 @app.route("/")
 def index():
     dominio = request.host_url.rstrip('/')
@@ -186,3 +185,6 @@ def index():
             "player": f"{dominio}/player/<SLUG>.mp4?id=ID&type=[movie|series]"
         }
     })
+
+# --- RODA NA PORTA 5000 ---
+app.run(host="0.0.0.0", port=5000)
