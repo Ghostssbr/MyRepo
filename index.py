@@ -8,16 +8,10 @@ import tmdbsimple as tmdb
 app = Flask(__name__)
 CORS(app)
 
-# Xtream-like URL
+# URL do M3U
 XTREAM_URL = "https://mixmil.cyou/get.php?username=269841127&password=466166574&type=m3u"
 
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
-
-def xtream_api():
-    """
-    Como a URL M3U não retorna JSON, vamos apenas devolver a URL como player direto
-    """
-    return XTREAM_URL
 
 def slugify(text):
     text = text.lower().strip()
@@ -31,7 +25,6 @@ def generate_slug(title, media_id):
 @app.route("/filmes")
 def filmes():
     dominio = request.host_url.rstrip('/')
-    # Exemplo genérico já que a URL M3U não possui JSON com títulos
     return jsonify([{
         "id": 1,
         "titulo": "Filme Exemplo",
@@ -157,10 +150,6 @@ def detalhes():
 # --- PLAYER ---
 @app.route("/player/<slug>.mp4")
 def player(slug):
-    media_id = request.args.get("id")
-    media_type = request.args.get("type")
-    if not media_id or media_type not in ["movie", "series"]:
-        return jsonify({"error": "Parâmetros inválidos"}), 400
     return redirect(XTREAM_URL)
 
 # --- INDEX ---
@@ -186,5 +175,6 @@ def index():
         }
     })
 
-# --- RODA NA PORTA 5000 ---
-app.run(host="0.0.0.0", port=5000)
+# Para Vercel: exporta como handler
+from mangum import Mangum
+handler = Mangum(app)
