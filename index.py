@@ -11,12 +11,10 @@ CORS(app)
 USERNAME = "269841127"
 PASSWORD = "466166574"
 BASE_URL = "https://mixmil.cyou/player_api.php"
-STREAM_BASE = BASE_URL.rsplit("/", 1)[0]  # https://mixmil.cyou
+STREAM_BASE = BASE_URL.rsplit("/", 1)[0]
 tmdb.API_KEY = "c0d0e0e40bae98909390cde31c402a9b"
 
-
 def xtream_api(action, extra=""):
-    """Consulta a API Xtream e retorna JSON (devolve lista/dict ou [] em erro)."""
     try:
         url = f"{BASE_URL}?username={USERNAME}&password={PASSWORD}&action={action}{extra}"
         res = requests.get(url, timeout=10)
@@ -25,36 +23,27 @@ def xtream_api(action, extra=""):
     except Exception:
         return []
 
-
 def slugify(text):
     text = (text or "").lower().strip()
     return re.sub(r"[^\w-]+", "-", text)
 
-
 def generate_slug(title, media_id):
     return f"{slugify(title)}-{hashlib.md5(str(media_id).encode()).hexdigest()[:6]}"
 
-
 def find_item(media_type, media_id):
-    """Tenta localizar o item na API e retornar o objeto cru (com possível 'container_extension' ou 'direct_source')."""
     mid = str(media_id)
-    # LIVE
     if media_type == "live":
         data = xtream_api("get_live_streams") or []
         for s in data:
             if str(s.get("stream_id")) == mid or str(s.get("id") or "") == mid:
                 return s
         return None
-
-    # MOVIE / VOD
     if media_type in ("movie", "vod"):
         data = xtream_api("get_vod_streams") or []
         for v in data:
             if str(v.get("stream_id")) == mid or str(v.get("id") or "") == mid:
                 return v
         return None
-
-    # SERIES (procura por episódio dentro de cada série) — pode ser mais lento dependendo do catálogo
     if media_type == "series":
         series_list = xtream_api("get_series") or []
         for s in series_list:
@@ -66,15 +55,11 @@ def find_item(media_type, media_id):
             for season_eps in episodes_dict.values():
                 for ep in season_eps:
                     if str(ep.get("id")) == mid or str(ep.get("episode_num") or "") == mid:
-                        # anexa info da série no episódio para referência
                         ep["_series"] = {"series_id": sid, "series_name": s.get("name")}
                         return ep
         return None
-
     return None
 
-
-# ---------- Filmes ----------
 @app.route("/filmes")
 def filmes():
     data = xtream_api("get_vod_streams") or []
@@ -87,14 +72,13 @@ def filmes():
             "titulo": item.get("name"),
             "ano": item.get("release_year"),
             "categoria_id": item.get("category_id"),
-            "capa": item.get("cover"),
+            "capa": item.get("stream_icon") or item.get("cover") or "https://fliskbr.vercel.app/img/sem-capa.jpg",
             "player": f"{dominio}/player/{generate_slug(item.get('name'), sid)}.mp4?id={sid}&type=movie",
             "detalhes": f"{dominio}/detalhes?titulo={item.get('name')}&tipo=filme",
             "container_extension": item.get("container_extension"),
             "direct_source": item.get("direct_source")
         })
     return jsonify({"status": "ok", "total": len(filmes), "filmes": filmes})
-
 
 @app.route("/filmes/categorias")
 def filmes_categorias():
@@ -104,28 +88,26 @@ def filmes_categorias():
                    "url": f"{dominio}/filmes/categoria/{c.get('category_id')}"} for c in cats]
     return jsonify({"status": "ok", "total": len(categorias), "categorias": categorias})
 
-
 @app.route("/filmes/categoria/<int:cat_id>")
 def filmes_por_categoria(cat_id):
     data = xtream_api("get_vod_streams", f"&category_id={cat_id}") or []
     dominio = request.host_url.rstrip("/")
     filmes = [{"id": i.get("stream_id"),
                "titulo": i.get("name"),
+               "capa": i.get("stream_icon") or i.get("cover") or "https://fliskbr.vercel.app/img/sem-capa.jpg",
                "player": f"{dominio}/player/{generate_slug(i.get('name'), i.get('stream_id'))}.mp4?id={i.get('stream_id')}&type=movie"}
               for i in data]
     return jsonify({"status": "ok", "categoria_id": cat_id, "total": len(filmes), "filmes": filmes})
 
-
-# ---------- Séries ----------
 @app.route("/series")
 def series():
     data = xtream_api("get_series") or []
     dominio = request.host_url.rstrip("/")
-    srs = [{"id": s.get("series_id"), "titulo": s.get("name"), "capa": s.get("cover"),
+    srs = [{"id": s.get("series_id"), "titulo": s.get("name"),
+            "capa": s.get("stream_icon") or s.get("cover") or "https://fliskbr.vercel.app/img/sem-capa.jpg",
             "categoria_id": s.get("category_id"), "temporadas_url": f"{dominio}/series/{s.get('series_id')}/temporadas"}
            for s in data]
     return jsonify({"status": "ok", "total": len(srs), "series": srs})
-
 
 @app.route("/series/categorias")
 def series_categorias():
@@ -135,16 +117,15 @@ def series_categorias():
                    "url": f"{dominio}/series/categoria/{c.get('category_id')}"} for c in cats]
     return jsonify({"status": "ok", "total": len(categorias), "categorias": categorias})
 
-
 @app.route("/series/categoria/<int:cat_id>")
 def series_por_categoria(cat_id):
     data = xtream_api("get_series", f"&category_id={cat_id}") or []
     dominio = request.host_url.rstrip("/")
     srs = [{"id": s.get("series_id"), "titulo": s.get("name"),
+            "capa": s.get("stream_icon") or s.get("cover") or "https://fliskbr.vercel.app/img/sem-capa.jpg",
             "temporadas_url": f"{dominio}/series/{s.get('series_id')}/temporadas"}
            for s in data]
     return jsonify({"status": "ok", "categoria_id": cat_id, "total": len(srs), "series": srs})
-
 
 @app.route("/series/<int:serie_id>/temporadas")
 def serie_temporadas(serie_id):
@@ -155,20 +136,18 @@ def serie_temporadas(serie_id):
                   for num in data.get("episodes", {}).keys()]
     return jsonify({"status": "ok", "serie_id": serie_id, "total": len(temporadas), "temporadas": temporadas})
 
-
 @app.route("/series/<int:serie_id>/temporadas/<int:temp_num>/episodios")
 def serie_episodios(serie_id, temp_num):
     data = xtream_api("get_series_info", f"&series_id={serie_id}") or {}
     episodios = data.get("episodes", {}).get(str(temp_num), []) or []
     dominio = request.host_url.rstrip("/")
     eps = [{"id": ep.get("id"), "titulo": ep.get("title"), "numero": ep.get("episode_num"),
+           "capa": ep.get("stream_icon") or "https://fliskbr.vercel.app/img/sem-capa.jpg",
            "player": f"{dominio}/player/{generate_slug(ep.get('title'), ep.get('id'))}.mp4?id={ep.get('id')}&type=series",
            "container_extension": ep.get("container_extension"), "direct_source": ep.get("direct_source")}
           for ep in episodios]
     return jsonify({"status": "ok", "serie_id": serie_id, "temporada": temp_num, "total": len(eps), "episodios": eps})
 
-
-# ---------- Canais ao vivo ----------
 @app.route("/canais")
 def canais():
     data = xtream_api("get_live_streams") or []
@@ -176,7 +155,6 @@ def canais():
     canais = []
     for c in data:
         sid = c.get("stream_id")
-        # tenta montar preview da stream direta (pode falhar se container_extension ausente)
         ext = c.get("container_extension") or None
         direct = c.get("direct_source")
         stream_url = None
@@ -188,7 +166,7 @@ def canais():
             "id": sid,
             "nome": c.get("name"),
             "categoria_id": c.get("category_id"),
-            "logo": c.get("stream_icon"),
+            "logo": c.get("stream_icon") or "https://fliskbr.vercel.app/img/sem-capa.jpg",
             "player": f"{dominio}/player/{generate_slug(c.get('name'), sid)}.mp4?id={sid}&type=live",
             "stream_url": stream_url,
             "container_extension": ext,
@@ -196,8 +174,6 @@ def canais():
         })
     return jsonify({"status": "ok", "total": len(canais), "canais": canais})
 
-
-# ---------- Detalhes via TMDB ----------
 @app.route("/detalhes")
 def detalhes():
     titulo = request.args.get("titulo")
@@ -246,34 +222,22 @@ def detalhes():
     except Exception as e:
         return jsonify({"erro": "Erro ao obter detalhes", "detalhe": str(e)}), 500
 
-
-# ---------- Player universal (resolve extensão / direct_source antes de redirecionar) ----------
 @app.route("/player/<slug>.mp4")
 def player(slug):
     media_id = request.args.get("id")
     media_type = request.args.get("type")
     if not media_id or media_type not in ["movie", "series", "live"]:
         return jsonify({"error": "Parâmetros inválidos"}), 400
-
-    # tenta achar info do item na API (live/vod/series)
     item = find_item(media_type, media_id)
     if not item:
         return jsonify({"error": "Mídia não encontrada"}, 404), 404
-
-    # se a API já fornece um direct_source -> redireciona direto
     direct = item.get("direct_source")
     if direct:
         return redirect(direct)
-
-    # usa container_extension quando disponível (caso contrário usa ts por padrão)
     ext = item.get("container_extension") or item.get("container") or "ts"
-
-    # monta a URL no formato padrão: /<media_type>/<username>/<password>/<id>.<ext>
     stream_url = f"{STREAM_BASE}/{media_type}/{USERNAME}/{PASSWORD}/{media_id}.{ext}"
     return redirect(stream_url)
 
-
-# ---------- Índice de rotas ----------
 @app.route("/")
 def index():
     dominio = request.host_url.rstrip("/")
